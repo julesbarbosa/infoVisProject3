@@ -1,29 +1,39 @@
+function AidNameByCountry(data) {
 
-function dataVis2(data) {
-  const countries = {};
-  data.forEach(d => {
-    let name = d.country;
-    if (name == 'Korea') {
-      name = 'Republic of Korea';
-    } else if (name == 'Slovak Republic') {
-      name = 'Slovakia';
-    }
-    countries[name] = {
-      pieData: [
-        { name: 'donated', value: d.donatedRate },
-        { name: 'received', value: d.receivedRate }
-      ]
-    };
-  });
-  return countries;
+  const top5purposes = d3.nest()
+    .key(d => d.coalesced_purpose_name)
+    .rollup(v => d3.sum(v, d => d.commitment_amount_usd_constant))
+    .entries(data)
+    // get only the top 5 entries
+    .sort((a, b) => d3.descending(a.value, b.value))
+    .slice(0, 5)
+    // get entry objects to their names
+    .map(d => d.key);
+
+
+  const top5aidPurposesByCountry = d3.nest()
+    .key(d => d.recipient)
+    .key(d => d.coalesced_purpose_name)
+    .rollup(v => d3.sum(v, d => d.commitment_amount_usd_constant))
+    .entries(data)
+    // filter top 5 purposes
+    .map(d => ({
+      country: d.key,
+      purposes: d.values
+        .map(v => ({ purpose: v.key, count: v.value }))
+        .filter(p => top5purposes.find(t => t == p.purpose))
+    }))
+
+  return fixData(top5aidPurposesByCountry);
+
 }
 
-function vis2(geoJSON, div, data) {
+function vis3(geoJSON, div, data) {
 
-  const margin = { top: 0, right: 20, bottom: 0, left: 20 };
+  const margin = { top: 20, right: 20, bottom: 20, left: 20 };
 
-  const visWidth = 1200 - margin.left - margin.right;
-  const visHeight = 800 - margin.top - margin.bottom;
+  const visWidth = 1300 - margin.left - margin.right;
+  const visHeight = 1000 - margin.top - margin.bottom;
 
   const zoom = d3.zoom()
     .scaleExtent([1, 10])
@@ -36,14 +46,14 @@ function vis2(geoJSON, div, data) {
     .on("click", reset);
 
   const g = svg.append('g')
-    .attr('transform', `translate(${visWidth}, ${visHeight})`);
+    .attr('transform', `translate(${margin.left}, ${margin.top})`);
 
   const projection = d3.geoEqualEarth()
     .fitSize([visWidth, visHeight], geoJSON);
 
   const path = d3.geoPath().projection(projection);
 
-  const color = d3.scaleOrdinal(d3.schemeCategory10)
+  const color = d3.scaleOrdinal(d3.schemeCategory10);
 
   g.selectAll('.border')
     .attr("cursor", "pointer")
@@ -97,15 +107,14 @@ function vis2(geoJSON, div, data) {
   }
 
   // CREAT PIE CHARTS
-
   const pie = d3.pie()
-    .value(d => d.value);
+    .value(d => d.count);
 
   const arc = d3.arc()
     .innerRadius(0)
     .outerRadius(7);
 
-  const countries = geoJSON.features.filter(d => data[d.properties.NAME_LONG]);
+  const countries = geoJSON.features.filter(d => data.find(c => c.country === d.properties.NAME_LONG));
 
   g.selectAll('.pieGroup')
     .data(countries)
@@ -115,16 +124,16 @@ function vis2(geoJSON, div, data) {
       .attr("transform", d => {
         return `translate(${path.centroid(d)})`
       })
-    )
+    );
 
   const pieGroups = g.selectAll('.pieGroup')
     .data(countries)
     .selectAll('path')
-    .data(d => pie(data[d.properties.NAME_LONG].pieData))
+    .data(d => pie(data.find(c => c.country === d.properties.NAME_LONG).purposes))
     .join(enter => enter
       .append("path")
       .attr('d', d => arc(d))
-      .attr('fill', d => color(d.data.name))
+      .attr('fill', d => color(d.data.purpose))
     )
 
   g.selectAll('.pieGroup')
@@ -133,21 +142,22 @@ function vis2(geoJSON, div, data) {
     .text(d => d.properties.NAME_LONG)
     .attr("font-size", "3px")
     .attr("style", "font-family: Arial, Helvetica, sans-serif")
-    .attr("transform", "translate(6,1)")
+    .attr("transform", "translate(6,1)");
 }
 
-function legend2(div) {
+function legend3(div) {
   const size = 20;
   const lineHeight = size * 1.5;
-  const width = 100;
+  const width = 300;
 
   const color = d3.scaleOrdinal()
-    .domain(["Donated", "Recieved"])
-    .range(d3.schemeTableau10);
+    .domain(["Air transport", "Rail transport", "Industrial development",
+      "Power generation/non-renewable sources", "Rescheduling and refinancing"])
+    .range(d3.schemeCategory10);
 
   const svg = div.append('svg')
     .attr('width', width)
-    .attr('height', color.domain().length * lineHeight)
+    .attr('height', color.domain().length * lineHeight);
 
   const rows = svg
     .selectAll("g")
@@ -167,6 +177,4 @@ function legend2(div) {
     .attr("x", lineHeight)
     .text(d => d);
 }
-
-
 
