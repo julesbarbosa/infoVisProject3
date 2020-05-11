@@ -1,145 +1,215 @@
-function totalAidByCountry(data) {
+function topDonorsAndRecipients(data) {
+  const recipientsData = d3.nest()
+    .key(d => d.recipient)
+    .rollup(v => d3.sum(v, d => d.commitment_amount_usd_constant))
+    .entries(data)
+    // get only the top 10 entries
+    .sort((a, b) => d3.descending(a.value, b.value))
+    .slice(0, 10)
+    .map(d => ({ key: d.key, value: -1 * d.value }))
 
-  const donorsAndRecipients = {
-    "donors": d3.rollup(data, v => d3.sum(v, d => d.commitment_amount_usd_constant), d => d.donor),
-    "recipient": d3.rollup(data, v => d3.sum(v, d => d.commitment_amount_usd_constant), d => d.recipient)
-  }
 
-  const donors = Array.from(donorsAndRecipients.donors, ([k, v]) => ({ country: k, value: v }));
-  const recipients = Array.from(donorsAndRecipients.recipient, ([k, v]) => ({ country: k, value: v }))
+  const donorsData = d3.nest()
+    .key(d => d.donor)
+    .rollup(v => d3.sum(v, d => d.commitment_amount_usd_constant))
+    .entries(data)
+    // get only the top 20 entries
+    .sort((a, b) => d3.descending(a.value, b.value))
+    .slice(0, 20)
 
-  const donorCountries = donors.map(d => d.country)
-  const recipientsCountries = recipients.map(d => d.country)
+  const uniquesDonors = donorsData.reduce((accumulator, d) => {
 
-  const countries = Array.from(new Set(donorCountries.concat(recipientsCountries)))
-
-  const aidData = countries.map(c => {
-    let donated = 0;
-    let received = 0;
-    if (donors.find(d => d.country == c)) {
-      donated = (donors.find(d => d.country == c)).value;
+    const count = accumulator[d.key] ? accumulator[d.key].degree : 0;
+    accumulator[d.key] = {
+      id: d.key,
+      degree: count + d.value
     }
-    if (recipients.find(d => d.country == c)) {
-      received = (recipients.find(d => d.country == c)).value
-    }
-    return {
-      country: c,
-      donated: donated,
-      received: received,
-      difference: donated - received,
-      total: donated + received,
-      donatedRate: donated / (donated + received),
-      receivedRate: received / (donated + received)
-    }
+    return accumulator;
+  }, {})
 
+  const uniquesRecipients = recipientsData.reduce((accumulator, d) => {
+
+    const count = accumulator[d.key] ? accumulator[d.key].degree : 0;
+    accumulator[d.key] = {
+      id: d.key,
+      degree: count + d.value
+    }
+    return accumulator;
+  }, {})
+
+  // //const uniques = donorsData.concat(recipientsData).reduce((accumulator, d) => {
+
+  //   const count = accumulator[d.key] ? accumulator[d.key].degree : 0;
+  //   accumulator[d.key] = {
+  //     id: d.key,
+  //     degree: count + d.value
+  //   }
+  //   return accumulator;
+  // }, {})
+
+  const nodesRecipients = Object.values(uniquesRecipients).map((d, indx) => (
+    { ...d, index: indx }
+  ))
+
+  const nodesDonors = Object.values(uniquesDonors).map((d, indx) => (
+    { ...d, index: indx }
+  ))
+
+  let transactions = data.map(d => {
+    const source = nodesDonors.find(node => node.id === d.donor)
+    const target = nodesRecipients.find(node => node.id === d.recipient);
+    if (source && target) {
+      return {
+        source,
+        target,
+        value: d.commitment_amount_usd_constant,
+        purpose: d.coalesced_purpose_name,
+      };
+    } else {
+      return null;
+    }
   })
-  return aidData.sort((a, b) => d3.ascending(a.difference, b.difference))
+    .filter(d => d != null)
+    .filter(d => d.value > 0)
+
+  const uniquesNodes = recipientsData.concat(donorsData).reduce((accumulator, d) => {
+
+    const count = accumulator[d.key] ? accumulator[d.key].degree : 0;
+    accumulator[d.key] = {
+      id: d.key,
+      degree: count + d.value
+    }
+    return accumulator;
+  }, {})
+
+  const nodes = Object.values(uniquesNodes).map((d, indx) => (
+    { ...d, index: indx }
+  ))
+
+  return ({
+    nodes: [...nodes.sort((a, b) => d3.descending(a.degree, b.degree))],
+    nodesDonors: [...nodesDonors],
+    nodesRecipients: [...nodesRecipients],
+    links: [...transactions]
+  })
+
+
+
 }
 
-function vis1(data, div) {
+function matrix(data) {
+  const edgeHash = {};
+  data.links.forEach(edge => {
+    var id = edge.source.id + "-" + edge.target.id
+    if (edgeHash[id]) {
+      edgeHash[id] = edgeHash[id] + edge.value;
+    } else {
+      edgeHash[id] = edge.value;
+    }
+  })
 
-  const margin = { top: 40, right: 20, bottom: 40, left: 100 };
+  const matrix = []
+  data.nodesDonors.forEach((source, a) => {
+    data.nodesRecipients.forEach((target, b) => {
+      var grid = {
+        id: source.id + "-" + target.id,
+        x: b,
+        y: a,
+        value: null,
+        source: source.id,
+        target: target.id
+      };
+      if (edgeHash[grid.id]) {
+        grid.value = edgeHash[grid.id];
+      }
+      matrix.push(grid)
+    })
+  })
+  return matrix
+}
 
-  const visWidth = 1000 - margin.left - margin.right;
-  const visHeight = 700 - margin.top - margin.bottom;
+
+
+function vis1(data, div, matrix) {
+
+  const margin = { top: 40, right: 50, bottom: 40, left: 100 };
+
+  const width = 1300 - margin.left - margin.right;
+  const height = 900 - margin.top + margin.bottom;
 
   const svg = div.append('svg')
-    .attr('width', visWidth + margin.left + margin.right)
-    .attr('height', visHeight + margin.top + margin.bottom);
+    .attr('width', width + margin.left + margin.right)
+    .attr('height', height + margin.top + margin.bottom)
 
-  const g = svg.append("g")
-    .attr("transform", `translate(${margin.left}, ${margin.top})`);
-
-
-  // Config
-  const cfg = {
-    labelMargin: 5,
-    xAxisMargin: 10,
-    legendRightMargin: 10
-  }
-
-  const x = d3.scaleLinear()
-    .range([0, visWidth]);
-
-  const colour = d3.scaleSequential(d3.interpolateRdYlBu);
-
-  const y = d3.scaleBand()
-    .range([visHeight, 0])
-    .padding(0.1);
+  const maxDonation = d3.max(matrix, transact => transact.value)
+  const minDonation = d3.min(matrix, transact => transact.value)
 
 
-  const legend = svg.append("g")
-    .attr("class", "legend");
 
-  legend.append("text")
-    .attr("class", "x-axis")
-    .attr("x", visWidth)
-    .attr("y", visHeight)
+  const color = d3.scaleSequential()
+    .domain([minDonation, maxDonation])
+    .interpolator(d3.interpolateRdPu)
+
+  //legend
+
+  svg.append("g")
+    .attr("transform", "translate(70,70)")
+    .append("text")
     .attr("text-anchor", "end")
-    .text("Diff in amount Donated and Recieved");
+    .text("Donor")
+    .style("font-size", "18px");
 
-  y.domain(data.map(function (d) { return d.country; }));
-  x.domain(d3.extent(data, function (d) { return d.difference; }));
-
-  const middle = 0
-  const max = d3.max(data, function (d) { return d.difference; })
-  const min = d3.min(data, function (d) { return d.difference; })
-  colour.domain([min, max]);
-
-  const yAxis = svg.append("g")
-    .attr("class", "y-axis")
-    .attr("transform", "translate(" + x(0) + ",0)")
-    .append("line")
-    .attr("y1", 0)
-    .attr("y2", visHeight);
-
-  const xformat = d3.format(".2s");
-  const xAxis = svg.append("g")
-    .attr("class", "x-axis")
-    .attr("transform", "translate(0," + (visHeight + cfg.xAxisMargin) + ")")
-    .call(d3.axisBottom(x)
-      .tickSizeOuter(0)
-      .tickFormat((n) => xformat(n).replace(/G/, "B"))
-    );
+  svg.append("g")
+    .attr("transform", "translate(150,30)")
+    .append("text")
+    .attr("text-anchor", "end")
+    .text("Recipient")
+    .style("font-size", "18px");
+  ;
 
 
-  const bars = svg.append("g")
-    .attr("class", "bars")
+  d3.select("svg").append("g")
+    .attr("transform", "translate(100,80)")
+    .attr("id", "adjacencyG")
+    .selectAll("rect")
+    .data(matrix)
+    .enter()
+    .append("rect")
+    .attr("fill", d => d.value != null ? color(d.value) : "white")
+    .attr("class", "grid")
+    .attr("width", 40)
+    .attr("height", 40)
+    .attr("x", d => d.x * 40)
+    .attr("y", d => d.y * 40)
 
-  bars.selectAll("rect")
-    .data(data)
-    .enter().append("rect")
-    .attr("class", "annual-growth")
-    .attr("x", function (d) {
-      return x(Math.min(middle, d.difference));
-    })
-    .attr("y", function (d) { return y(d.country); })
-    .attr("height", y.bandwidth())
-    .attr("width", function (d) {
-      return Math.abs(x(d.difference) - x(middle))
-    })
-    .style("fill", function (d) {
-      return colour(d.difference)
-    });
 
-  var labels = svg.append("g")
-    .attr("class", "labels");
+  d3.selectAll("svg")
+    .append("g")
+    .attr("transform", "translate(100,75)")
+    .selectAll("text")
+    .data(data.nodesRecipients)
+    .enter()
+    .append("text")
+    .text(d => d.id)
+    .style("font-size", "12px")
 
-  labels.selectAll("text")
-    .data(data)
-    .enter().append("text")
-    .attr("class", "bar-label")
-    .attr("x", x(0))
-    .attr("y", function (d) { return y(d.country) })
-    .attr("dx", function (d) {
-      return d.difference < 0 ? cfg.labelMargin : -cfg.labelMargin;
-    })
-    .attr("dy", y.bandwidth())
-    .attr("text-anchor", function (d) {
-      return d.difference < 0 ? "start" : "end";
-    })
-    .text(function (d) { return d.country })
 
-}
+    .attr("x", (d, i) => 0)
+    .attr("y", (d, i) => 0)
+    .attr("transform", (d, i) => "rotate(-40," + (i * 40 + 17.5) + ",0) translate(" + (i * 40 + 17.5) + ")")
+    .style("text-anchor", "start")
 
+
+  d3.select("svg")
+    .append("g").attr("transform", "translate(95,80)")
+    .selectAll("text")
+    .data(data.nodesDonors)
+    .enter()
+    .append("text")
+    .attr("y", (d, i) => i * 40 + 17.5)
+    .text(d => d.id)
+    .style("text-anchor", "end")
+    .style("font-size", "12px")
+
+};
 

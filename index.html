@@ -23,16 +23,33 @@
         <script src="https://d3js.org/d3-transition.v1.min.js"></script>
         <script src="https://d3js.org/d3-drag.v1.min.js"></script>
         <script src="https://d3js.org/d3-zoom.v1.min.js"></script>
-        
+        <script src="https://d3js.org/d3.v5.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js"></script>
+        <script src="//cdnjs.cloudflare.com/ajax/libs/d3-legend/1.1.0/d3-legend.js"></script>
+
         <!-- Then our visualization code --> 
         <script src="visualizations/vis1.js" defer></script>
+        <script src="visualizations/legend.js" defer></script>
         <script src="visualizations/vis2.js" defer></script>
-        <script src="visualizations/vis3.js" defer></script>
 
         <!-- Then our code that calls the visualizations --> 
         <script src="main.js" defer></script>
         <style>
-         
+            .grid {
+                stroke: rgb(138, 137, 135); 
+            } 
+          
+
+            path.active {
+              stroke: rgb(243, 211, 175)
+            }
+            circle.source {
+              fill: #e0e2de;
+            }
+            circle.target {
+              fill: #41A368;
+            }
+                    
             .y-axis line{
               stroke: black;
             }
@@ -48,10 +65,6 @@
             .domain, .tick line {
               opacity: 0.5;
             }
-
-            .pieGroup {
-              fill-opacity: .5;
-            }
           
           </style>
     </head>
@@ -59,18 +72,16 @@
     <body>
         <div id="container">
             <p>Juliana, jsb742</p>
-            <p>Mini-project #1</p>
+            <p>Mini-project #3</p>
 
-            <h1>Visualization 1 - Net amount of donated and recieved by country</h1>
+            <h1>Visualization 1 - Heatmap - Donations between top countries </h1>
+            <div id="example1"></div>
             <div id="vis1"></div>
             
-            <h1>Visualization 2 - Proportion of donated and recieved by country </h1>
+            <h1>Visualization 2 - Purposes of donations between countries </h1>
             <div id="vis2legend"></div>
             <div id="vis2"></div>
 
-            <h1>Visualization 3 - Purposes of disbursements recieved by country</h1>
-            <div id="vis3legend"></div>
-            <div id="vis3"></div>
         </div>
     </body>
 </html>

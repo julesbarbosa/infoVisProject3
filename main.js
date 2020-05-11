@@ -23,15 +23,14 @@ Promise.all([
 ]).then(([data, geoJSON]) => {
   
   store.data = data;
-  store.data1 = totalAidByCountry(data)
-  store.data2 = dataVis2(store.data1)
-  store.data3 = AidNameByCountry(store.data)
-  vis1(store.data1, d3.select('#vis1'))
-  vis2(geoJSON, d3.select('#vis2'), store.data2)
-  vis3(geoJSON, d3.select('#vis3'), store.data3)
-  legend2(d3.select("#vis2legend"))
-  legend3(d3.select("#vis3legend"))
-
+  store.data1 = topDonorsAndRecipients(data)
+  store.data2 = matrix(store.data1)
+  store.data3 = question2(store.data1)
+  console.log("esse",store.data2)
+  vis1(store.data1, d3.select('#vis1'), store.data2 )
+  vis2(store.data1, d3.select('#vis2'), store.data2, store.data3)
+  legend(store.data2, d3.select("#example1"))
+  legend2(d3.select("#vis2legend"), store.data3)
 
 
 
